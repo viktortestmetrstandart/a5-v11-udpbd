@@ -69,7 +69,7 @@ jobs:
           echo "Detected profile: $PROFILE"
 
           make image PROFILE="$PROFILE" \
-            PACKAGES="-dnsmasq -firewall -ip6tables -iptables -odhcp6c -odhcpd -ppp -ppp-mod-pppoe -kmod-rt2800-soc -kmod-rt2800-lib -kmod-rt2800-mmio -kmod-rt2x00-lib -kmod-rt2x00-mmio -kmod-mac80211 -kmod-cfg80211 -wpad-mini -iwinfo -uclient-fetch -opkg kmod-usb-core kmod-usb-ohci kmod-usb2 kmod-usb-storage kmod-usb-storage-extras" \
+            PACKAGES="-dnsmasq -firewall -ip6tables -iptables -odhcp6c -odhcpd -ppp -ppp-mod-pppoe -kmod-rt2800-soc -kmod-rt2800-lib -kmod-rt2800-mmio -kmod-rt2x00-lib -kmod-rt2x00-mmio -kmod-mac80211 -kmod-cfg80211 -wpad-mini -iwinfo -uclient-fetch -opkg kmod-usb-core kmod-usb-ohci kmod-usb2 kmod-usb-storage kmod-usb-storage-extras libstdcpp" \
             FILES="$FILES_DIR"
 
           ls -lh bin/targets/ramips/rt305x/*a5-v11*
