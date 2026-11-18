@@ -1,0 +1,81 @@
+name: Build A5-V11 UDPBD Firmware
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main, master ]
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential gawk unzip zlib1g-dev file wget xz-utils libncurses5-dev git
+
+      - name: Download LEDE 17.01.7 SDK and ImageBuilder
+        run: |
+          BASE_URL="https://archive.openwrt.org/releases/17.01.7/targets/ramips/rt305x"
+          wget -q --show-progress "$BASE_URL/lede-sdk-17.01.7-ramips-rt305x_gcc-5.4.0_musl-1.1.16.Linux-x86_64.tar.xz"
+          wget -q --show-progress "$BASE_URL/lede-imagebuilder-17.01.7-ramips-rt305x.Linux-x86_64.tar.xz"
+          tar -xf lede-sdk-*.tar.xz
+          tar -xf lede-imagebuilder-*.tar.xz
+          rm -f *.tar.xz
+
+      - name: Cross-compile udpbd-server (mipsel_24kc)
+        run: |
+          SDK_DIR="$(pwd)/$(ls -d lede-sdk-* | head -n1)"
+          TOOLCHAIN_DIR="$(ls -d "$SDK_DIR"/staging_dir/toolchain-* | head -n1)"
+          export STAGING_DIR="$TOOLCHAIN_DIR"
+          TARGET_CC="$(ls "$TOOLCHAIN_DIR"/bin/*-openwrt-linux-musl-gcc | head -n1)"
+          TARGET_CXX="$(ls "$TOOLCHAIN_DIR"/bin/*-openwrt-linux-musl-g++ | head -n1)"
+
+          git clone --depth=1 https://github.com/israpps/udpbd-server.git
+          cd udpbd-server
+          OBJS=""
+          for f in *.c; do
+            [ -f "$f" ] || continue
+            "$TARGET_CC" -Os -Wall -D_FILE_OFFSET_BITS=64 -c "$f" -o "${f%.c}.o"
+            OBJS="$OBJS ${f%.c}.o"
+          done
+          for f in *.cpp; do
+            [ -f "$f" ] || continue
+            "$TARGET_CXX" -Os -Wall -D_FILE_OFFSET_BITS=64 -c "$f" -o "${f%.cpp}.o"
+            OBJS="$OBJS ${f%.cpp}.o"
+          done
+          "$TARGET_CXX" $OBJS -static-libstdc++ -static-libgcc -s -o udpbd-server
+
+          cd ..
+          mkdir -p files/usr/bin
+          cp udpbd-server/udpbd-server files/usr/bin/udpbd-server
+          file files/usr/bin/udpbd-server
+          ls -lh files/usr/bin/udpbd-server
+
+      - name: Build stripped LEDE 17.01.7 image for A5-V11
+        run: |
+          chmod 755 files/usr/bin/udpbd-server files/usr/sbin/udpbd-ctl files/etc/init.d/udpbd files/etc/uci-defaults/99-ps2-udpbd-setup
+          chmod 644 files/etc/hotplug.d/block/90-udpbd
+
+          IB_DIR="$(pwd)/$(ls -d lede-imagebuilder-* | head -n1)"
+          FILES_DIR="$(pwd)/files"
+          cd "$IB_DIR"
+
+          PROFILE="$(make info | awk '/^[[:alnum:]_-]+:/{p=$1} tolower(p) ~ /^a5-v11:/{sub(/:$/,"",p); print p; exit}')"
+          echo "Detected profile: $PROFILE"
+
+          make image PROFILE="$PROFILE" \
+            PACKAGES="-dnsmasq -firewall -ip6tables -iptables -odhcp6c -odhcpd -ppp -ppp-mod-pppoe -kmod-rt2800-soc -kmod-rt2800-lib -kmod-rt2800-mmio -kmod-rt2x00-lib -kmod-rt2x00-mmio -kmod-mac80211 -kmod-cfg80211 -wpad-mini -iwinfo -uclient-fetch -opkg kmod-usb-core kmod-usb-ohci kmod-usb2 kmod-usb-storage kmod-usb-storage-extras" \
+            FILES="$FILES_DIR"
+
+          ls -lh bin/targets/ramips/rt305x/*a5-v11*
+
+      - name: Upload firmware artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: a5-v11-udpbd-firmware
+          path: lede-imagebuilder-*/bin/targets/ramips/rt305x/*a5-v11*
