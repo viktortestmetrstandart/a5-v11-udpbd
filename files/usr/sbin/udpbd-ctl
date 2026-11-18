@@ -1,0 +1,70 @@
+#!/bin/sh
+
+LOCK_DIR="/var/lock/udpbd.lock"
+PID_FILE="/var/run/udpbd.pid"
+DEV_FILE="/var/run/udpbd.dev"
+BIN="/usr/bin/udpbd-server"
+
+acquire_lock() {
+    local i=0
+    mkdir -p /var/lock /var/run
+    while ! mkdir "$LOCK_DIR" 2>/dev/null; do
+        i=$((i + 1))
+        [ "$i" -ge 50 ] && return 1
+        sleep 1
+    done
+    trap 'rmdir "$LOCK_DIR" 2>/dev/null' EXIT
+    return 0
+}
+
+stop_server() {
+    if [ -f "$PID_FILE" ]; then
+        start-stop-daemon -K -p "$PID_FILE" -s TERM 2>/dev/null
+        sleep 1
+        start-stop-daemon -K -p "$PID_FILE" -s KILL 2>/dev/null
+    fi
+    killall udpbd-server 2>/dev/null
+    rm -f "$PID_FILE" "$DEV_FILE"
+}
+
+start_dev() {
+    local dev="$1"
+    [ -b "/dev/$dev" ] || return 1
+    stop_server
+    echo "$dev" > "$DEV_FILE"
+    logger -t udpbd "Starting udpbd-server on /dev/$dev"
+    start-stop-daemon -S -b -m -p "$PID_FILE" -x "$BIN" -- "/dev/$dev"
+}
+
+find_first_disk() {
+    local d
+    for d in /dev/sd[a-z]; do
+        [ -b "$d" ] && { basename "$d"; return 0; }
+    done
+    return 1
+}
+
+acquire_lock || exit 1
+
+case "$1" in
+    start)
+        start_dev "$2"
+        ;;
+    stop)
+        if [ -f "$DEV_FILE" ] && [ "$(cat "$DEV_FILE")" = "$2" ]; then
+            logger -t udpbd "Stopping udpbd-server (removed /dev/$2)"
+            stop_server
+            next_dev="$(find_first_disk)"
+            [ -n "$next_dev" ] && start_dev "$next_dev"
+        fi
+        ;;
+    boot)
+        if [ ! -f "$PID_FILE" ] || ! kill -0 "$(cat "$PID_FILE" 2>/dev/null)" 2>/dev/null; then
+            next_dev="$(find_first_disk)"
+            [ -n "$next_dev" ] && start_dev "$next_dev"
+        fi
+        ;;
+    stop_all)
+        stop_server
+        ;;
+esac
