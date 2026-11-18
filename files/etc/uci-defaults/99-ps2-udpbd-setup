@@ -1,0 +1,14 @@
+#!/bin/sh
+
+uci set system.@system[0].hostname='ps2-udpbd'
+uci set network.lan.ipaddr='192.168.1.1'
+uci set network.lan.netmask='255.255.255.0'
+uci -q delete network.lan.ip6assign
+uci -q delete network.wan
+uci -q delete network.wan6
+uci commit
+
+chmod 755 /usr/bin/udpbd-server /usr/sbin/udpbd-ctl /etc/init.d/udpbd
+/etc/init.d/udpbd enable
+
+exit 0
