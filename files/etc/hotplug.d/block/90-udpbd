@@ -1,0 +1,17 @@
+#!/bin/sh
+
+[ "$DEVTYPE" = "disk" ] || exit 0
+
+case "$DEVNAME" in
+    sd[a-z]) ;;
+    *) exit 0 ;;
+esac
+
+case "$ACTION" in
+    add)
+        /usr/sbin/udpbd-ctl start "$DEVNAME"
+        ;;
+    remove)
+        /usr/sbin/udpbd-ctl stop "$DEVNAME"
+        ;;
+esac
