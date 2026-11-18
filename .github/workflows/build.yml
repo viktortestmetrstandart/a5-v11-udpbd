@@ -48,7 +48,7 @@ jobs:
             "$TARGET_CXX" -Os -Wall -D_FILE_OFFSET_BITS=64 -c "$f" -o "${f%.cpp}.o"
             OBJS="$OBJS ${f%.cpp}.o"
           done
-          "$TARGET_CXX" $OBJS -static-libstdc++ -static-libgcc -s -o udpbd-server
+          "$TARGET_CXX" $OBJS -s -o udpbd-server
 
           cd ..
           mkdir -p files/usr/bin
